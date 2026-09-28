@@ -247,6 +247,9 @@ tr.sig td{background:rgba(34,197,94,.10)}
       <option value="live">Live prices - Binance public data (paper trading)</option>
       <option value="hyperliquid" selected>Hyperliquid - REAL trading (wallet)</option>
       <option value="binance">Binance - REAL trading (API key)</option>
+      <option value="solana">Solana wallet (Phantom) - manual swap only</option>
+      <option value="metamask">MetaMask (Ethereum / BNB / Monad) - view only</option>
+      <option value="tron">Tron (TronLink) - view only</option>
     </select>
     <div id="simOnly">
       <label for="scenario">Scenario</label>
@@ -336,6 +339,28 @@ tr.sig td{background:rgba(34,197,94,.10)}
         <button id="bBnArm" class="panic" style="width:100%" disabled>2. Enable real trading</button>
       </div>
       <button id="bBnDisconnect" style="width:100%;margin-top:8px;display:none">Disconnect</button>
+    </div>
+    <div id="walletOnly" style="display:none">
+      <div class="warnbox" style="margin:6px 0">The automated strategy (Bollinger/RSI scanning, Start/Pause below) does not run on this source - there's no historical price feed or automated order path for it here. This just connects the wallet and, for Solana, opens the manual swap tool.</div>
+      <div id="woSolana" style="display:none">
+        <button id="bWoSolConnect" style="width:100%">Connect Phantom</button>
+        <div id="woSolStatus" class="note" style="margin-top:8px">Not connected.</div>
+      </div>
+      <div id="woMetamask" style="display:none">
+        <label for="wo_mmNetwork">Network</label>
+        <select id="wo_mmNetwork">
+          <option value="ethereum">Ethereum Mainnet</option>
+          <option value="bnb">BNB Smart Chain</option>
+          <option value="monad">Monad Testnet</option>
+        </select>
+        <button id="bWoMmConnect" style="width:100%;margin-top:6px">Connect MetaMask</button>
+        <div id="woMmStatus" class="note" style="margin-top:8px">Not connected.</div>
+      </div>
+      <div id="woTron" style="display:none">
+        <button id="bWoTrxConnect" style="width:100%">Connect TronLink</button>
+        <div id="woTrxStatus" class="note" style="margin-top:8px">Not connected.</div>
+      </div>
+      <button id="bWoOpenWallets" style="width:100%;margin-top:8px">Open Wallets tab (swap tools, Bitcoin lookup, disconnect)</button>
     </div>
     <h3>Account</h3>
     <label for="capital">Starting balance (USDT)</label><input id="capital" inputmode="decimal">
@@ -3247,6 +3272,7 @@ function loadAccount() {
     M = sim;
   } else if (settings.source === "hyperliquid") { sim = null; M = HL; }
   else if (settings.source === "binance") { sim = null; M = BN; }
+  else if (settings.source === "solana" || settings.source === "metamask" || settings.source === "tron") { sim = null; M = null; }
   else { sim = null; M = Live; }
   scanRows = []; lastTk = {};
 }
@@ -3476,6 +3502,7 @@ function onStart() {
   if (S.halted && S.haltReason !== "goal") return showBanner("The bot is halted. Press Reset account first.");
   if (settings.source === "hyperliquid" && !hlArmed) return showBanner("Connect, authorise and enable real trading first (Connect panel).");
   if (settings.source === "binance" && !bnArmed) return showBanner("Connect and enable real trading first (Connect panel).");
+  if (settings.source === "solana" || settings.source === "metamask" || settings.source === "tron") return showBanner("The automated bot doesn't run on this source - it's wallet-connect only. Use the manual swap tool (Solana) or another source to run the strategy.");
   if (!S.hist.length && !S.trades && !Object.keys(S.positions).length) {
     S.startEquity = S.peak = S.dayStart = S.cash = settings.source === "hyperliquid" ? +settings.hl_capital : settings.source === "binance" ? +settings.bn_capital : +settings.capital;
     if (sim && sim.scn !== settings.scenario) { sim = new Sim(settings.scenario); M = sim; }   // scenario picked before first run
@@ -3806,6 +3833,48 @@ function bnDisconnect() {
 }
 $("bBnConnect").onclick = bnConnect; $("bBnArm").onclick = bnArm; $("bBnDisconnect").onclick = bnDisconnect;
 
+/* ---- sidebar "Source" wallet-connect shortcuts (Solana/MetaMask/Tron) - same MultiChain object as the Wallets tab ---- */
+async function woSolConnectClick() {
+  const st = $("woSolStatus"); $("bWoSolConnect").disabled = true; st.className = "note"; st.textContent = "Connecting...";
+  try {
+    await MultiChain.solConnect();
+    st.className = "note ok"; st.textContent = "Checking balance...";
+    const bal = await MultiChain.solBalance();
+    st.innerHTML = `Connected: <b>${MultiChain.sol.address.slice(0,6)}...${MultiChain.sol.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} SOL</b>. Open the Wallets tab below to run a swap.`;
+    $("solStatus").innerHTML = st.innerHTML; $("jupSwapBox").style.display = "block";   // keep the Wallets tab panel in sync
+  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  $("bWoSolConnect").disabled = false;
+}
+$("bWoSolConnect").onclick = woSolConnectClick;
+async function woMmConnectClick() {
+  const st = $("woMmStatus"); $("bWoMmConnect").disabled = true; st.className = "note"; st.textContent = "Connecting...";
+  try {
+    $("mmNetwork").value = $("wo_mmNetwork").value;   // keep the Wallets tab's network selector in sync
+    await MultiChain.mmConnect($("wo_mmNetwork").value);
+    st.className = "note ok"; st.textContent = "Checking balance...";
+    const bal = await MultiChain.mmBalance();
+    const net = MM_NETWORKS[MultiChain.mm.network];
+    st.innerHTML = `Connected: <b>${MultiChain.mm.address.slice(0,6)}...${MultiChain.mm.address.slice(-4)}</b> on ${net.name}. Balance: <b>${bal.toFixed(6)} ${net.symbol}</b>.`;
+    $("mmStatus").innerHTML = st.innerHTML; $("bMmDisconnect").style.display = "block";
+  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  $("bWoMmConnect").disabled = false;
+}
+$("bWoMmConnect").onclick = woMmConnectClick;
+$("wo_mmNetwork").onchange = () => { if (MultiChain.mm.address) woMmConnectClick(); };
+async function woTrxConnectClick() {
+  const st = $("woTrxStatus"); $("bWoTrxConnect").disabled = true; st.className = "note"; st.textContent = "Connecting...";
+  try {
+    await MultiChain.trxConnect();
+    st.className = "note ok"; st.textContent = "Checking balance...";
+    const bal = await MultiChain.trxBalance();
+    st.innerHTML = `Connected: <b>${MultiChain.trx.address.slice(0,6)}...${MultiChain.trx.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} TRX</b>.`;
+    $("trxStatus").innerHTML = st.innerHTML;
+  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  $("bWoTrxConnect").disabled = false;
+}
+$("bWoTrxConnect").onclick = woTrxConnectClick;
+$("bWoOpenWallets").onclick = () => document.querySelector('.tab[data-t=wallets]').click();
+
 /* ============================ UI ============================ */
 let renderedLogs = 0, tab = "pos";
 function showBanner(m) { const b = $("banner"); b.style.display = m ? "block" : "none"; b.textContent = m || ""; }
@@ -3822,22 +3891,31 @@ function paintStatus() {
 }
 function render() {
   const live = settings.source === "live", hl = settings.source === "hyperliquid", bn = settings.source === "binance";
+  const wallet = settings.source === "solana" || settings.source === "metamask" || settings.source === "tron";
   const realArmed = (hl && hlArmed) || (bn && bnArmed);
-  $("badge").textContent = hl ? (hlArmed ? "HYPERLIQUID - REAL" : "HYPERLIQUID - NOT ARMED") : bn ? (bnArmed ? "BINANCE - REAL" : "BINANCE - NOT ARMED") : live ? "LIVE PRICES - PAPER" : "SIMULATION";
-  $("badge").className = "badge" + ((live || (hl && !hlArmed) || (bn && !bnArmed)) ? " live" : realArmed ? " real" : "");
-  $("simOnly").style.display = (live || hl || bn) ? "none" : "block"; $("liveOnly").style.display = live ? "block" : "none"; $("hlOnly").style.display = hl ? "block" : "none"; $("bnOnly").style.display = bn ? "block" : "none";
+  $("badge").textContent = hl ? (hlArmed ? "HYPERLIQUID - REAL" : "HYPERLIQUID - NOT ARMED") : bn ? (bnArmed ? "BINANCE - REAL" : "BINANCE - NOT ARMED") : wallet ? "WALLET - NO AUTO BOT" : live ? "LIVE PRICES - PAPER" : "SIMULATION";
+  $("badge").className = "badge" + ((live || (hl && !hlArmed) || (bn && !bnArmed) || wallet) ? " live" : realArmed ? " real" : "");
+  $("simOnly").style.display = (live || hl || bn || wallet) ? "none" : "block"; $("liveOnly").style.display = live ? "block" : "none"; $("hlOnly").style.display = hl ? "block" : "none"; $("bnOnly").style.display = bn ? "block" : "none";
+  $("walletOnly").style.display = wallet ? "block" : "none";
+  if (wallet) {
+    $("woSolana").style.display = settings.source === "solana" ? "block" : "none";
+    $("woMetamask").style.display = settings.source === "metamask" ? "block" : "none";
+    $("woTron").style.display = settings.source === "tron" ? "block" : "none";
+  }
   const has = S.hist.length > 0 || S.trades > 0 || Object.keys(S.positions).length > 0;
-  $("bStart").disabled = running || (S.halted && S.haltReason !== "goal") || (hl && !hlArmed) || (bn && !bnArmed);
+  $("bStart").disabled = running || wallet || (S.halted && S.haltReason !== "goal") || (hl && !hlArmed) || (bn && !bnArmed);
   $("bStop").disabled = !running; $("bPanic").disabled = !(running || Object.keys(S.positions).length);
   $("bReset").disabled = running; $("source").disabled = running;
   LIVE_KEYS.concat(["speed"]).forEach(k => $(k).disabled = false);
-  $("capital").disabled = running || has || hl || bn; $("scenario").disabled = running || has;
+  $("capital").disabled = running || has || hl || bn || wallet; $("scenario").disabled = running || has;
   if (hl) renderHl();
   if (bn) renderBn();
   $("note").textContent = hlArmed
     ? "REAL TRADING IS ARMED on Hyperliquid: orders use real money. Stop-losses only run while this tab stays open."
     : bnArmed
     ? "REAL TRADING IS ARMED on Binance: orders use real money. Stop-losses only run while this tab stays open."
+    : wallet
+    ? "This source just connects a wallet - it doesn't run the automated strategy. For Solana, use the manual swap tool (a real trade, one at a time, needs your approval in Phantom every time)."
     : "Paper trading: no real orders are placed. Positions and stop-losses are only managed while this page is open.";
   $("note").style.background = realArmed ? "#3a1218" : "";
   $("note").style.borderColor = realArmed ? "var(--red)" : "";
