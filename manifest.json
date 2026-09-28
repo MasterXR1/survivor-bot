@@ -1,0 +1,15 @@
+{
+ "name": "Survivor Bot",
+ "short_name": "Survivor Bot",
+ "description": "Mean-reversion crypto trading bot that trades real money on Hyperliquid or Binance by default (paper/testnet modes available), with a Wallets tab for viewing Ethereum, BNB Chain, Monad, Solana, Tron and Bitcoin balances, survival rules, a profit goal, a strategy optimiser, market data and an AI assistant.",
+ "start_url": "/",
+ "scope": "/",
+ "display": "standalone",
+ "orientation": "any",
+ "background_color": "#0b1220",
+ "theme_color": "#0b1220",
+ "icons": [
+  {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+  {"src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable"}
+ ]
+}
