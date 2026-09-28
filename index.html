@@ -243,9 +243,9 @@ tr.sig td{background:rgba(34,197,94,.10)}
     <h3>Market data</h3>
     <label for="source">Source</label>
     <select id="source">
-      <option value="sim">Simulated market (practice mode)</option>
+      <option value="sim" selected>Simulated market (practice mode)</option>
       <option value="live">Live prices - Binance public data (paper trading)</option>
-      <option value="hyperliquid" selected>Hyperliquid - REAL trading (wallet)</option>
+      <option value="hyperliquid">Hyperliquid - REAL trading (wallet)</option>
       <option value="binance">Binance - REAL trading (API key)</option>
       <option value="solana">Solana wallet (Phantom) - manual swap only</option>
       <option value="metamask">MetaMask (Ethereum / BNB / Monad) - view only</option>
@@ -362,6 +362,7 @@ tr.sig td{background:rgba(34,197,94,.10)}
       </div>
       <button id="bWoOpenWallets" style="width:100%;margin-top:8px">Open Wallets tab (swap tools, Bitcoin lookup, disconnect)</button>
     </div>
+    <div id="strategySection">
     <h3>Account</h3>
     <label for="capital">Starting balance (USDT)</label><input id="capital" inputmode="decimal">
     <h3>Strategy &amp; risk</h3>
@@ -378,6 +379,7 @@ tr.sig td{background:rgba(34,197,94,.10)}
     <label for="bb_std">Band width (std devs)</label><input id="bb_std" inputmode="decimal">
     <label for="max_hold">Max hold (hours)</label><input id="max_hold" inputmode="numeric">
     <button id="bReset" style="width:100%;margin-top:14px">Reset account</button>
+    </div>
     <details><summary>How it works</summary>
       <p><b>Scans</b> the most liquid USDT markets each cycle.</p>
       <p><b>Buys</b> when price closes below the lower Bollinger Band with RSI under 30 and a bounce candle, skipping coins that fell over 20% in a day.</p>
@@ -3136,6 +3138,26 @@ const MM_NETWORKS = {
   monad: {chainIdHex: "0x279f", name: "Monad Testnet", rpc: "https://testnet-rpc.monad.xyz", symbol: "MON", explorer: "https://testnet.monadexplorer.com/address/",
           addParams: {chainId: "0x279f", chainName: "Monad Testnet", nativeCurrency: {name: "MON", symbol: "MON", decimals: 18}, rpcUrls: ["https://testnet-rpc.monad.xyz"], blockExplorerUrls: ["https://testnet.monadexplorer.com"]}},
 };
+/* On a phone, "install a browser extension" is impossible - MetaMask/Phantom/TronLink extensions only exist on
+   desktop browsers. Their apps instead work by opening THIS page inside their own in-app browser, reachable via
+   a universal link. This detects that case and offers the link instead of a dead-end error message. */
+const isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function walletDeepLink(kind) {
+  const url = location.href;
+  if (kind === "sol") return `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(location.origin)}`;
+  if (kind === "mm") return `https://metamask.app.link/dapp/${location.host}${location.pathname}${location.search}`;
+  return null;
+}
+function renderWalletErr(st, e, kind) {
+  st.className = "note bad";
+  const notFound = /not found/i.test(e.message);
+  if (isMobileUA && notFound && kind) {
+    const link = walletDeepLink(kind), name = kind === "sol" ? "Phantom" : "MetaMask";
+    st.innerHTML = `${e.message} Browser extensions like this don't exist on phones - open this page inside the ${name} app instead: <a href="${link}" style="color:var(--accent)">Open in ${name} &#8599;</a>`;
+  } else {
+    st.textContent = e.message;
+  }
+}
 const MultiChain = {
   mm: {address: null, network: null},
   sol: {address: null},
@@ -3249,7 +3271,7 @@ const Jupiter = {
 };
 
 /* ============================ app state ============================ */
-let settings = Object.assign({source: "hyperliquid", scenario: "ranging", speed: "400", interval: "5", capital: "500",
+let settings = Object.assign({source: "sim", scenario: "ranging", speed: "400", interval: "5", capital: "500",
                               stop: "4", tp: "6", maxpos: "3", risk: "1", goal: "0", goal_action: "lock", rsi_buy: "30", bb_std: "2.0", max_hold: "48",
                               hl_network: "1", hl_capital: "100", bn_network: "1", bn_capital: "100"}, store.get("sb_settings") || {});
 let S = null, sim = null, M = null, lastTk = {}, scanRows = [], scanAt = null, logs = [];
@@ -3638,7 +3660,7 @@ async function mmConnectClick() {
     const net = MM_NETWORKS[MultiChain.mm.network];
     st.innerHTML = `Connected: <b>${MultiChain.mm.address.slice(0,6)}...${MultiChain.mm.address.slice(-4)}</b> on ${net.name}. Balance: <b>${bal.toFixed(6)} ${net.symbol}</b>. <a href="${net.explorer}${MultiChain.mm.address}" target="_blank" rel="noopener" style="color:var(--accent)">View &#8599;</a>`;
     $("bMmDisconnect").style.display = "block";
-  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  } catch (e) { renderWalletErr(st, e, "mm"); }
   $("bMmConnect").disabled = false;
 }
 $("bMmConnect").onclick = mmConnectClick;
@@ -3652,7 +3674,7 @@ async function solConnectClick() {
     const bal = await MultiChain.solBalance();
     st.innerHTML = `Connected: <b>${MultiChain.sol.address.slice(0,6)}...${MultiChain.sol.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} SOL</b>. <a href="https://solscan.io/account/${MultiChain.sol.address}" target="_blank" rel="noopener" style="color:var(--accent)">View &#8599;</a>`;
     $("jupSwapBox").style.display = "block";
-  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  } catch (e) { renderWalletErr(st, e, "sol"); }
   $("bSolConnect").disabled = false;
 }
 $("bSolConnect").onclick = solConnectClick;
@@ -3720,7 +3742,7 @@ async function trxConnectClick() {
     st.className = "note ok"; st.textContent = "Checking balance...";
     const bal = await MultiChain.trxBalance();
     st.innerHTML = `Connected: <b>${MultiChain.trx.address.slice(0,6)}...${MultiChain.trx.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} TRX</b>. <a href="https://tronscan.org/#/address/${MultiChain.trx.address}" target="_blank" rel="noopener" style="color:var(--accent)">View &#8599;</a>`;
-  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  } catch (e) { renderWalletErr(st, e, null); }
   $("bTrxConnect").disabled = false;
 }
 $("bTrxConnect").onclick = trxConnectClick;
@@ -3842,7 +3864,7 @@ async function woSolConnectClick() {
     const bal = await MultiChain.solBalance();
     st.innerHTML = `Connected: <b>${MultiChain.sol.address.slice(0,6)}...${MultiChain.sol.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} SOL</b>. Open the Wallets tab below to run a swap.`;
     $("solStatus").innerHTML = st.innerHTML; $("jupSwapBox").style.display = "block";   // keep the Wallets tab panel in sync
-  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  } catch (e) { renderWalletErr(st, e, "sol"); }
   $("bWoSolConnect").disabled = false;
 }
 $("bWoSolConnect").onclick = woSolConnectClick;
@@ -3856,7 +3878,7 @@ async function woMmConnectClick() {
     const net = MM_NETWORKS[MultiChain.mm.network];
     st.innerHTML = `Connected: <b>${MultiChain.mm.address.slice(0,6)}...${MultiChain.mm.address.slice(-4)}</b> on ${net.name}. Balance: <b>${bal.toFixed(6)} ${net.symbol}</b>.`;
     $("mmStatus").innerHTML = st.innerHTML; $("bMmDisconnect").style.display = "block";
-  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  } catch (e) { renderWalletErr(st, e, "mm"); }
   $("bWoMmConnect").disabled = false;
 }
 $("bWoMmConnect").onclick = woMmConnectClick;
@@ -3869,7 +3891,7 @@ async function woTrxConnectClick() {
     const bal = await MultiChain.trxBalance();
     st.innerHTML = `Connected: <b>${MultiChain.trx.address.slice(0,6)}...${MultiChain.trx.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} TRX</b>.`;
     $("trxStatus").innerHTML = st.innerHTML;
-  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  } catch (e) { renderWalletErr(st, e, null); }
   $("bWoTrxConnect").disabled = false;
 }
 $("bWoTrxConnect").onclick = woTrxConnectClick;
@@ -3897,13 +3919,17 @@ function render() {
   $("badge").className = "badge" + ((live || (hl && !hlArmed) || (bn && !bnArmed) || wallet) ? " live" : realArmed ? " real" : "");
   $("simOnly").style.display = (live || hl || bn || wallet) ? "none" : "block"; $("liveOnly").style.display = live ? "block" : "none"; $("hlOnly").style.display = hl ? "block" : "none"; $("bnOnly").style.display = bn ? "block" : "none";
   $("walletOnly").style.display = wallet ? "block" : "none";
+  $("strategySection").style.display = wallet ? "none" : "block";
   if (wallet) {
     $("woSolana").style.display = settings.source === "solana" ? "block" : "none";
     $("woMetamask").style.display = settings.source === "metamask" ? "block" : "none";
     $("woTron").style.display = settings.source === "tron" ? "block" : "none";
   }
   const has = S.hist.length > 0 || S.trades > 0 || Object.keys(S.positions).length > 0;
-  $("bStart").disabled = running || wallet || (S.halted && S.haltReason !== "goal") || (hl && !hlArmed) || (bn && !bnArmed);
+  // Only disable Start for states that need no further explanation (already running / halted) - for a
+  // not-yet-armed or wallet-only source, leave it clickable so onStart()'s own message tells the person
+  // exactly what to do next, instead of a greyed-out button with no feedback at all.
+  $("bStart").disabled = running || (S.halted && S.haltReason !== "goal");
   $("bStop").disabled = !running; $("bPanic").disabled = !(running || Object.keys(S.positions).length);
   $("bReset").disabled = running; $("source").disabled = running;
   LIVE_KEYS.concat(["speed"]).forEach(k => $(k).disabled = false);
