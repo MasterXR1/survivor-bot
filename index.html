@@ -157,7 +157,7 @@ tr.sig td{background:rgba(34,197,94,.10)}
     </div></div>
     <div class="pane" id="p-wallets" style="display:none;max-height:none"><div class="guide">
       <h3>Connect other chains</h3>
-      <p>These connections are for viewing an address and its balance only - this app does not yet place trades on these chains (only Hyperliquid and Binance, in the sidebar, actually trade). Nothing here ever moves funds; each "Check balance" reads public blockchain data only.</p>
+      <p>Ethereum, BNB Chain, Monad, Tron and Bitcoin here are for viewing an address and its balance only - this app does not place trades on them (only Hyperliquid and Binance, in the sidebar, run the automated strategy). Solana is the exception: once Phantom is connected you can run a manual swap below, quoted and routed through Jupiter's public aggregator and signed by Phantom itself - it is not part of the automated bot, each swap is one-off and needs your confirmation in Phantom every time.</p>
       <div class="warnbox">Bitcoin, Tron and Solana use completely different signing schemes from Ethereum's - a MetaMask key cannot control funds on those chains, and vice versa. Only send each asset to an address on its own native network.</div>
 
       <p><b>Ethereum / BNB Chain / Monad (MetaMask or similar)</b></p>
@@ -174,6 +174,37 @@ tr.sig td{background:rgba(34,197,94,.10)}
       <p style="margin-top:16px"><b>Solana (Phantom)</b></p>
       <button id="bSolConnect" style="width:100%">Connect Phantom</button>
       <div id="solStatus" class="note" style="margin-top:8px">Not connected.</div>
+
+      <div id="jupSwapBox" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2)">
+        <p style="margin:0 0 6px"><b>Manual swap (Jupiter)</b> - real trade, one at a time, quoted live and signed by Phantom.</p>
+        <label for="jupFrom">From</label>
+        <select id="jupFrom">
+          <option value="SOL">SOL</option>
+          <option value="USDC">USDC</option>
+          <option value="custom">Custom mint address...</option>
+        </select>
+        <input id="jupFromMint" placeholder="Token mint address" style="display:none;width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-size:12px">
+        <input id="jupFromDecimals" type="number" placeholder="Decimals (e.g. 6)" style="display:none;width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-size:12px">
+        <label for="jupTo" style="margin-top:8px">To</label>
+        <select id="jupTo">
+          <option value="USDC">USDC</option>
+          <option value="SOL">SOL</option>
+          <option value="custom">Custom mint address...</option>
+        </select>
+        <input id="jupToMint" placeholder="Token mint address" style="display:none;width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-size:12px">
+        <input id="jupToDecimals" type="number" placeholder="Decimals (e.g. 6)" style="display:none;width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-size:12px">
+        <label for="jupAmount" style="margin-top:8px">Amount (in "From" token)</label>
+        <input id="jupAmount" type="number" min="0" step="any" placeholder="e.g. 0.5" style="width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:7px 9px;font-size:13px">
+        <button id="bJupQuote" style="width:100%;margin-top:8px">Get live quote</button>
+        <div id="jupQuoteStatus" class="note" style="margin-top:8px">No quote yet.</div>
+        <div id="jupConfirmBox" style="display:none;margin-top:8px">
+          <label for="jupConfirmText">Type SWAP to confirm this real trade</label>
+          <input id="jupConfirmText" placeholder="SWAP" style="width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:7px 9px;font-size:13px">
+          <button id="bJupSwap" style="width:100%;margin-top:6px;background:var(--danger,#c0392b);color:#fff">Swap now (Phantom will ask you to approve)</button>
+        </div>
+        <div id="jupSwapResult" class="note" style="margin-top:8px"></div>
+        <div class="hint">Quotes and routing come from Jupiter's public aggregator API (lite-api.jup.ag) - a third party this app does not control. Phantom shows you the exact transaction and asks you to approve it before anything is signed or sent; this app never holds your Solana key.</div>
+      </div>
 
       <p style="margin-top:16px"><b>Tron (TronLink)</b></p>
       <button id="bTrxConnect" style="width:100%">Connect TronLink</button>
@@ -3144,6 +3175,54 @@ const MultiChain = {
   },
 };
 
+/* ============================ Solana manual swap (Jupiter aggregator) ============================
+   Real trading, but manual and one-off - not part of the automated bot loop. Verified live against
+   lite-api.jup.ag on 2026-09-29 (keyless free tier, 1 req/s). Phantom signs and sends every swap
+   itself; this app never sees or holds a Solana private key. Only SOL and USDC mints are built in -
+   both checked live against the API - anything else requires the user to paste in their own mint
+   address, which puts the burden of getting that address right on them, same as pasting any address. */
+const JUP_BASE = "https://lite-api.jup.ag/swap/v1";
+const SOL_TOKENS = {
+  SOL:  {mint: "So11111111111111111111111111111111111111112", decimals: 9},
+  USDC: {mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6},
+};
+const SOL_WEB3_CDN = "https://cdn.jsdelivr.net/npm/@solana/web3.js@1/lib/index.iife.min.js";
+const Jupiter = {
+  async loadWeb3() {
+    if (window.solanaWeb3) return window.solanaWeb3;
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = SOL_WEB3_CDN; s.onload = res;
+      s.onerror = () => rej(new Error("Could not load the Solana library from " + SOL_WEB3_CDN + "."));
+      document.head.appendChild(s);
+    });
+    if (!window.solanaWeb3) throw new Error("Solana library failed to load.");
+    return window.solanaWeb3;
+  },
+  async quote(inputMint, outputMint, amountBaseUnits, slippageBps = 50) {
+    const url = `${JUP_BASE}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${Math.round(amountBaseUnits)}&slippageBps=${slippageBps}`;
+    const resp = await fetch(url);
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || j.error) throw new Error((j && j.error) || `Jupiter quote failed (${resp.status}). No route may exist for this pair/amount.`);
+    return j;
+  },
+  async buildSwapTx(quoteResponse, userPublicKey) {
+    const resp = await fetch(`${JUP_BASE}/swap`, {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({quoteResponse, userPublicKey, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true, prioritizationFeeLamports: "auto"})});
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || j.error || !j.swapTransaction) throw new Error((j && j.error) || `Could not build the swap transaction (${resp.status}).`);
+    return j.swapTransaction;
+  },
+  async signAndSend(base64Tx) {
+    const web3 = await this.loadWeb3();
+    const raw = Uint8Array.from(atob(base64Tx), c => c.charCodeAt(0));
+    const tx = web3.VersionedTransaction.deserialize(raw);
+    if (!window.solana || !window.solana.isPhantom) throw new Error("Phantom wallet not found or disconnected.");
+    const {signature} = await window.solana.signAndSendTransaction(tx);
+    return signature;
+  },
+};
+
 /* ============================ app state ============================ */
 let settings = Object.assign({source: "hyperliquid", scenario: "ranging", speed: "400", interval: "5", capital: "500",
                               stop: "4", tp: "6", maxpos: "3", risk: "1", goal: "0", goal_action: "lock", rsi_buy: "30", bb_std: "2.0", max_hold: "48",
@@ -3545,10 +3624,68 @@ async function solConnectClick() {
     st.className = "note ok"; st.textContent = "Checking balance...";
     const bal = await MultiChain.solBalance();
     st.innerHTML = `Connected: <b>${MultiChain.sol.address.slice(0,6)}...${MultiChain.sol.address.slice(-4)}</b>. Balance: <b>${bal.toFixed(6)} SOL</b>. <a href="https://solscan.io/account/${MultiChain.sol.address}" target="_blank" rel="noopener" style="color:var(--accent)">View &#8599;</a>`;
+    $("jupSwapBox").style.display = "block";
   } catch (e) { st.className = "note bad"; st.textContent = e.message; }
   $("bSolConnect").disabled = false;
 }
 $("bSolConnect").onclick = solConnectClick;
+
+/* ---- Jupiter manual swap UI (Solana, real trades, one at a time) ---- */
+function jupTokenPick(selId, mintId, decId) {
+  const sel = $(selId).value;
+  const custom = sel === "custom";
+  $(mintId).style.display = custom ? "block" : "none";
+  $(decId).style.display = custom ? "block" : "none";
+}
+$("jupFrom").onchange = () => jupTokenPick("jupFrom", "jupFromMint", "jupFromDecimals");
+$("jupTo").onchange = () => jupTokenPick("jupTo", "jupToMint", "jupToDecimals");
+function jupResolveToken(side) {
+  const sel = $("jup" + side).value;
+  if (sel !== "custom") return {sym: sel, ...SOL_TOKENS[sel]};
+  const mint = $("jup" + side + "Mint").value.trim();
+  const decimals = +$("jup" + side + "Decimals").value;
+  if (!mint) throw new Error(`Paste a mint address for the "${side}" token.`);
+  if (!isFinite(decimals) || decimals < 0 || decimals > 18) throw new Error(`Enter the correct number of decimals for the "${side}" token (check it on Solscan first - an SPL token's decimals are fixed on-chain and getting this wrong will misprice the trade by orders of magnitude).`);
+  return {sym: mint.slice(0, 4) + "..", mint, decimals};
+}
+let jupLastQuote = null;
+async function jupQuoteClick() {
+  const st = $("jupQuoteStatus"); $("jupConfirmBox").style.display = "none"; $("jupSwapResult").textContent = ""; jupLastQuote = null;
+  try {
+    if (!MultiChain.sol.address) throw new Error("Connect Phantom first.");
+    const from = jupResolveToken("From"), to = jupResolveToken("To");
+    if (from.mint === to.mint) throw new Error('"From" and "To" tokens must be different.');
+    const amount = +$("jupAmount").value;
+    if (!isFinite(amount) || amount <= 0) throw new Error("Enter an amount greater than 0.");
+    st.className = "note"; st.textContent = "Getting a live quote from Jupiter..."; $("bJupQuote").disabled = true;
+    const amountBaseUnits = amount * (10 ** from.decimals);
+    const quote = await Jupiter.quote(from.mint, to.mint, amountBaseUnits);
+    const outUi = (+quote.outAmount) / (10 ** to.decimals);
+    const impact = quote.priceImpactPct ? (+quote.priceImpactPct * 100).toFixed(3) + "%" : "n/a";
+    jupLastQuote = {quote, from, to, amount};
+    st.className = "note ok";
+    st.innerHTML = `Quote: <b>${amount} ${from.sym}</b> &rarr; approx. <b>${outUi.toFixed(6)} ${to.sym}</b> (price impact ${impact}). This quote is only valid for a short time - swap promptly or re-quote.`;
+    $("jupConfirmBox").style.display = "block";
+  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  $("bJupQuote").disabled = false;
+}
+$("bJupQuote").onclick = jupQuoteClick;
+async function jupSwapClick() {
+  const st = $("jupSwapResult");
+  try {
+    if (!jupLastQuote) throw new Error("Get a quote first.");
+    if ($("jupConfirmText").value.trim().toUpperCase() !== "SWAP") throw new Error('Type SWAP (in capitals) to confirm - this places a real, irreversible on-chain trade.');
+    $("bJupSwap").disabled = true; st.className = "note"; st.textContent = "Building the swap transaction...";
+    const b64 = await Jupiter.buildSwapTx(jupLastQuote.quote, MultiChain.sol.address);
+    st.textContent = "Sending to Phantom for your approval...";
+    const sig = await Jupiter.signAndSend(b64);
+    st.className = "note ok";
+    st.innerHTML = `Sent. Signature: <a href="https://solscan.io/tx/${sig}" target="_blank" rel="noopener" style="color:var(--accent)">${sig.slice(0,10)}...${sig.slice(-6)} &#8599;</a> - check Solscan for final confirmation.`;
+    $("jupConfirmText").value = ""; $("jupConfirmBox").style.display = "none"; jupLastQuote = null;
+  } catch (e) { st.className = "note bad"; st.textContent = e.message && e.message.includes("User rejected") ? "Cancelled in Phantom." : e.message; }
+  $("bJupSwap").disabled = false;
+}
+$("bJupSwap").onclick = jupSwapClick;
 async function trxConnectClick() {
   const st = $("trxStatus"); $("bTrxConnect").disabled = true; st.className = "note"; st.textContent = "Connecting...";
   try {
