@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Survivor Bot">
 <style>
-:root{--bg:#0b1220;--panel:#121b2e;--panel2:#1a2640;--fg:#e6edf7;--muted:#8a97ad;--accent:#3b82f6;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--border:#27344f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root{--bg:#08090d;--panel:#101216;--panel2:#181b21;--fg:#e8eaed;--muted:#7d8592;--accent:#3b82f6;--green:#00e88f;--red:#ff4d5e;--amber:#f59e0b;--border:#22262e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px 16px 8px}
@@ -44,6 +44,22 @@ details p{margin:6px 0}
 canvas{width:100%;height:250px;display:block}
 .tabs{display:flex;gap:4px;margin-bottom:0;flex-wrap:wrap}
 .tab{background:var(--panel);color:var(--muted);border-radius:7px 7px 0 0;padding:8px 14px}.tab.sel{background:var(--panel2);color:var(--fg)}
+.dsHead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 0 2px}
+.dsChains{display:flex;gap:6px;flex-wrap:wrap}
+.dsChip{background:var(--panel2);color:var(--muted);border-radius:16px;padding:5px 12px;font-size:12px;font-weight:600}
+.dsChip.sel{background:var(--green);color:#04130a}
+.dsTable{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+.dsTable th{text-align:right;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:6px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.dsTable th:first-child,.dsTable td:first-child{text-align:left}
+.dsTable td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.dsTable tr:hover td{background:var(--panel2)}
+.dsUp{color:var(--green)}.dsDown{color:var(--red)}
+.dsTok{display:flex;align-items:center;gap:8px;font-family:system-ui,-apple-system,sans-serif}
+.dsTok img{width:22px;height:22px;border-radius:50%;background:var(--panel2);flex:none}
+.dsSym{font-weight:700;color:var(--fg)}.dsName{color:var(--muted);font-size:11px}
+.dsChainTag{font-size:10px;color:var(--muted);background:var(--panel2);border-radius:4px;padding:2px 6px}
+.dsBuy{background:var(--green);color:#04130a;padding:5px 10px;font-size:11px;border-radius:5px}
+.dsTrade{background:var(--panel2);color:var(--fg);padding:5px 10px;font-size:11px;border-radius:5px;text-decoration:none;display:inline-block}
 .pane{background:var(--panel);border-radius:0 10px 10px 10px;overflow:auto;max-height:340px;min-height:140px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th{position:sticky;top:0;background:var(--panel2);color:var(--muted);font-size:11px;text-align:right;padding:8px 10px}
@@ -108,11 +124,31 @@ tr.sig td{background:rgba(34,197,94,.10)}
     <div class="goalbar" id="goalBar"><div class="goalTop"><span id="goalText"></span><b id="goalPct"></b></div><div class="track"><div id="goalFill"></div></div></div>
     <div id="chartwrap"><canvas id="chart"></canvas></div>
     <div class="tabs">
-      <button class="tab sel" data-t="pos">Open positions</button><button class="tab" data-t="scan">Market scanner</button>
+      <button class="tab sel" data-t="discover">Discover</button><button class="tab" data-t="pos">Open positions</button><button class="tab" data-t="scan">Market scanner</button>
       <button class="tab" data-t="trades">Trade history</button><button class="tab" data-t="log">Log</button>
       <button class="tab" data-t="market">Market</button><button class="tab" data-t="opt">Optimiser</button><button class="tab" data-t="ai">AI assistant</button><button class="tab" data-t="wallets">Wallets</button><button class="tab" data-t="fund">Fund</button><button class="tab" data-t="live">Go live</button>
     </div>
-    <div class="pane" id="p-pos"></div>
+    <div class="pane" id="p-discover" style="max-height:none">
+      <div class="dsHead">
+        <div class="dsChains" id="dsChains">
+          <button class="dsChip sel" data-chain="all">All</button>
+          <button class="dsChip" data-chain="solana">Solana</button>
+          <button class="dsChip" data-chain="ethereum">Ethereum</button>
+          <button class="dsChip" data-chain="bsc">BNB Chain</button>
+          <button class="dsChip" data-chain="base">Base</button>
+          <button class="dsChip" data-chain="arbitrum">Arbitrum</button>
+        </div>
+        <input id="dsSearch" placeholder="Search a token name, symbol or address..." style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:7px 10px;font-size:13px">
+        <button id="bDsSearch">Search</button>
+        <button id="bDsRefresh">&#8635; Trending</button>
+      </div>
+      <div id="dsStatus" class="note" style="margin:8px 0">Loading trending tokens from DexScreener...</div>
+      <div style="overflow-x:auto"><table class="dsTable" id="dsTable"><thead><tr>
+        <th>Token</th><th>Chain</th><th>Price</th><th>5m</th><th>1h</th><th>24h</th><th>Liquidity</th><th>Mkt cap</th><th>Vol 24h</th><th></th>
+      </tr></thead><tbody id="dsBody"></tbody></table></div>
+      <div class="hint" style="margin-top:8px">Live market data from <a href="https://dexscreener.com" target="_blank" rel="noopener" style="color:var(--accent)">DexScreener's</a> public API - a third party this app doesn't control; always check a token's liquidity and contract yourself before trading it, and treat brand-new/low-liquidity tokens as extremely high risk. "Buy" only works for Solana tokens right now (routed through the Jupiter swap tool) - other chains open the token's DexScreener page to trade there yourself.</div>
+    </div>
+    <div class="pane" id="p-pos" style="display:none"></div>
     <div class="pane" id="p-scan" style="display:none"></div>
     <div class="pane" id="p-trades" style="display:none"></div>
     <div class="pane" id="p-log" style="display:none"><div id="log"></div></div>
@@ -3300,6 +3336,139 @@ const Jupiter = {
   },
 };
 
+/* ============================ Discover: live token feed (DexScreener public API) ============================
+   Verified live against api.dexscreener.com on 2026-09-29 (keyless, free tier). This is read-only market data
+   from a third party this app doesn't control - it is not vetted, and a token appearing here is not a
+   recommendation. "Buy" only wires up for Solana, through the already-verified Jupiter swap panel; other
+   chains link out to the token's own DexScreener page since there's no verified in-app swap route for them. */
+const DEXS_BASE = "https://api.dexscreener.com";
+const DEXS_CHAIN_NAMES = {solana: "Solana", ethereum: "Ethereum", bsc: "BNB Chain", base: "Base", arbitrum: "Arbitrum", tron: "Tron"};
+const Discover = {
+  async trending(limit = 24) {
+    const resp = await fetch(`${DEXS_BASE}/token-boosts/latest/v1`);
+    if (!resp.ok) throw new Error(`DexScreener returned ${resp.status}.`);
+    const boosts = await resp.json();
+    const seen = new Set(), picks = [];
+    for (const b of boosts) {
+      const key = b.chainId + ":" + b.tokenAddress;
+      if (seen.has(key) || !DEXS_CHAIN_NAMES[b.chainId]) continue;
+      seen.add(key); picks.push(b);
+      if (picks.length >= limit) break;
+    }
+    const rows = [];
+    for (const b of picks) {
+      try {
+        const r = await fetch(`${DEXS_BASE}/latest/dex/tokens/${b.tokenAddress}`);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const pairs = (j.pairs || []).filter(p => p.chainId === b.chainId);
+        if (!pairs.length) continue;
+        pairs.sort((a, c) => (c.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+        rows.push(pairs[0]);
+      } catch (e) { /* skip a token whose lookup failed, keep the rest */ }
+    }
+    return rows;
+  },
+  async search(q) {
+    const r = await fetch(`${DEXS_BASE}/latest/dex/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error(`Search failed (${r.status}).`);
+    const j = await r.json();
+    return (j.pairs || []).filter(p => DEXS_CHAIN_NAMES[p.chainId]).sort((a, c) => (c.liquidity?.usd || 0) - (a.liquidity?.usd || 0)).slice(0, 30);
+  },
+};
+let dsRows = [], dsChain = "all";
+function dsFmtUsd(n) {
+  if (!isFinite(n)) return "-";
+  if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+  return "$" + n.toFixed(0);
+}
+function dsFmtPrice(n) {
+  if (!isFinite(n)) return "-";
+  if (n >= 1) return "$" + n.toFixed(4);
+  if (n === 0) return "$0";
+  const decimals = Math.min(12, Math.max(2, -Math.floor(Math.log10(n)) + 3));
+  return "$" + n.toFixed(decimals);
+}
+function dsFmtPct(n) {
+  if (!isFinite(n)) return '<span class="note">-</span>';
+  const cls = n > 0 ? "dsUp" : n < 0 ? "dsDown" : "";
+  const sign = n > 0 ? "+" : "";
+  return `<span class="${cls}">${sign}${n.toFixed(1)}%</span>`;
+}
+function dsRenderRows() {
+  const body = $("dsBody"), rows = dsChain === "all" ? dsRows : dsRows.filter(p => p.chainId === dsChain);
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="10" class="note" style="text-align:center;padding:20px">No tokens to show.</td></tr>`; return; }
+  body.innerHTML = rows.map((p, i) => {
+    const icon = p.info?.imageUrl ? `<img src="${p.info.imageUrl}" loading="lazy" onerror="this.style.display='none'">` : `<img>`;
+    const ageMs = p.pairCreatedAt ? Date.now() - p.pairCreatedAt : null;
+    const age = ageMs == null ? "-" : ageMs < 3600e3 ? Math.round(ageMs / 60e3) + "m" : ageMs < 86400e3 ? Math.round(ageMs / 3600e3) + "h" : Math.round(ageMs / 86400e3) + "d";
+    const action = p.chainId === "solana"
+      ? `<button class="dsBuy" data-i="${i}" data-chain="${dsChain === "all" ? p.chainId : dsChain}">Buy</button>`
+      : `<a class="dsTrade" href="${p.url}" target="_blank" rel="noopener">Trade &#8599;</a>`;
+    return `<tr>
+      <td><div class="dsTok">${icon}<div><div class="dsSym">${(p.baseToken?.symbol || "?").slice(0, 12)}</div><div class="dsName">${(p.baseToken?.name || "").slice(0, 22)}</div></div></div></td>
+      <td><span class="dsChainTag">${DEXS_CHAIN_NAMES[p.chainId] || p.chainId}</span></td>
+      <td>${dsFmtPrice(+p.priceUsd || 0)}</td>
+      <td>${dsFmtPct(p.priceChange?.m5)}</td>
+      <td>${dsFmtPct(p.priceChange?.h1)}</td>
+      <td>${dsFmtPct(p.priceChange?.h24)}</td>
+      <td>${dsFmtUsd(p.liquidity?.usd || 0)}</td>
+      <td>${dsFmtUsd(p.marketCap || p.fdv || 0)}</td>
+      <td>${dsFmtUsd(p.volume?.h24 || 0)}</td>
+      <td>${age} &nbsp;${action}</td>
+    </tr>`;
+  }).join("");
+  body.querySelectorAll(".dsBuy").forEach(btn => btn.onclick = () => dsBuyClick(rows[+btn.dataset.i]));
+}
+async function dsLoadTrending() {
+  const st = $("dsStatus"); st.className = "note"; st.textContent = "Loading trending tokens from DexScreener...";
+  $("bDsRefresh").disabled = true;
+  try {
+    dsRows = await Discover.trending();
+    st.className = "note ok"; st.textContent = `${dsRows.length} trending tokens, refreshed ${new Date().toLocaleTimeString()}.`;
+    dsRenderRows();
+  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  $("bDsRefresh").disabled = false;
+}
+async function dsSearchClick() {
+  const q = $("dsSearch").value.trim(), st = $("dsStatus");
+  if (!q) return dsLoadTrending();
+  st.className = "note"; st.textContent = `Searching for "${q}"...`; $("bDsSearch").disabled = true;
+  try {
+    dsRows = await Discover.search(q);
+    st.className = "note ok"; st.textContent = `${dsRows.length} result(s) for "${q}".`;
+    dsRenderRows();
+  } catch (e) { st.className = "note bad"; st.textContent = e.message; }
+  $("bDsSearch").disabled = false;
+}
+async function dsBuyClick(p) {
+  document.querySelector('.tab[data-t=wallets]').click();
+  const st = $("jupQuoteStatus");
+  st.className = "note"; st.textContent = `Loading ${p.baseToken.symbol}'s decimals...`;
+  $("jupFrom").value = "USDC"; jupTokenPick("jupFrom", "jupFromMint", "jupFromDecimals");
+  $("jupTo").value = "custom"; jupTokenPick("jupTo", "jupToMint", "jupToDecimals");
+  $("jupToMint").value = p.baseToken.address;
+  try {
+    const resp = await fetch("https://api.mainnet-beta.solana.com", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({jsonrpc: "2.0", id: 1, method: "getTokenSupply", params: [p.baseToken.address]})});
+    const j = await resp.json();
+    if (j.error || !j.result) throw new Error(j.error?.message || "Could not read this token's decimals.");
+    $("jupToDecimals").value = j.result.value.decimals;
+    st.className = "note ok"; st.textContent = `Ready to quote ${p.baseToken.symbol} (decimals: ${j.result.value.decimals}). Enter an amount below and press "Get live quote".`;
+  } catch (e) { st.className = "note bad"; st.textContent = e.message + " You can still enter the decimals yourself if you know them."; }
+  if (!MultiChain.sol.address) showBanner('Connect Phantom in the Solana section below, then get a quote.');
+}
+document.querySelectorAll("#dsChains .dsChip").forEach(btn => btn.onclick = () => {
+  dsChain = btn.dataset.chain;
+  document.querySelectorAll("#dsChains .dsChip").forEach(x => x.classList.toggle("sel", x === btn));
+  dsRenderRows();
+});
+$("bDsRefresh").onclick = dsLoadTrending;
+$("bDsSearch").onclick = dsSearchClick;
+$("dsSearch").addEventListener("keydown", e => { if (e.key === "Enter") dsSearchClick(); });
+
 /* ============================ app state ============================ */
 let settings = Object.assign({source: "sim", scenario: "ranging", speed: "400", interval: "5", capital: "500",
                               stop: "4", tp: "6", maxpos: "3", risk: "1", goal: "0", goal_action: "lock", rsi_buy: "30", bb_std: "2.0", max_hold: "48",
@@ -3932,7 +4101,7 @@ $("bWoTrxConnect").onclick = woTrxConnectClick;
 $("bWoOpenWallets").onclick = () => document.querySelector('.tab[data-t=wallets]').click();
 
 /* ============================ UI ============================ */
-let renderedLogs = 0, tab = "pos";
+let renderedLogs = 0, tab = "discover";
 function showBanner(m) { const b = $("banner"); b.style.display = m ? "block" : "none"; b.textContent = m || ""; }
 function paintStatus() {
   const el = $("status"); let t, c = "";
@@ -4367,7 +4536,7 @@ $("bStart").onclick = onStart; $("bStop").onclick = () => { stopRun(); log("INFO
 $("bPanic").onclick = onPanic; $("bReset").onclick = onReset;
 document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   tab = b.dataset.t; document.querySelectorAll(".tab").forEach(x => x.classList.toggle("sel", x === b));
-  ["pos", "scan", "market", "trades", "log", "opt", "ai", "wallets", "fund", "live"].forEach(t => $("p-" + t).style.display = t === tab ? "block" : "none");
+  ["discover", "pos", "scan", "market", "trades", "log", "opt", "ai", "wallets", "fund", "live"].forEach(t => $("p-" + t).style.display = t === tab ? "block" : "none");
   if (tab === "log") $("p-log").scrollTop = $("p-log").scrollHeight;
   if (tab === "fund") renderFund();
 });
@@ -4391,4 +4560,5 @@ window.addEventListener("online", updateOnline); window.addEventListener("offlin
 
 setInterval(paintStatus, 1000);
 render();
+dsLoadTrending();
 </script></body></html>
