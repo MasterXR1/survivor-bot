@@ -157,12 +157,13 @@ tr.sig td{background:rgba(34,197,94,.10)}
     </div></div>
     <div class="pane" id="p-wallets" style="display:none;max-height:none"><div class="guide">
       <h3>Connect other chains</h3>
-      <p>Ethereum, BNB Chain, Monad, Tron and Bitcoin here are for viewing an address and its balance only - this app does not place trades on them (only Hyperliquid and Binance, in the sidebar, run the automated strategy). Solana is the exception: once Phantom is connected you can run a manual swap below, quoted and routed through Jupiter's public aggregator and signed by Phantom itself - it is not part of the automated bot, each swap is one-off and needs your confirmation in Phantom every time.</p>
+      <p>Arbitrum, Ethereum, BNB Chain, Monad, Tron and Bitcoin here are for viewing an address and its balance only - this app does not place trades on them (only Hyperliquid and Binance, in the sidebar, run the automated strategy - Hyperliquid itself runs on Arbitrum, which is why it's connected the same way, with MetaMask). Solana is the exception: once Phantom is connected you can run a manual swap below, quoted and routed through Jupiter's public aggregator and signed by Phantom itself - it is not part of the automated bot, each swap is one-off and needs your confirmation in Phantom every time.</p>
       <div class="warnbox">Bitcoin, Tron and Solana use completely different signing schemes from Ethereum's - a MetaMask key cannot control funds on those chains, and vice versa. Only send each asset to an address on its own native network.</div>
 
-      <p><b>Ethereum / BNB Chain / Monad (MetaMask or similar)</b></p>
+      <p><b>Arbitrum / Ethereum / BNB Chain / Monad (MetaMask or similar)</b></p>
       <label for="mmNetwork">Network</label>
       <select id="mmNetwork">
+        <option value="arbitrum">Arbitrum One (Hyperliquid's chain)</option>
         <option value="ethereum">Ethereum Mainnet</option>
         <option value="bnb">BNB Smart Chain</option>
         <option value="monad">Monad Testnet</option>
@@ -170,6 +171,7 @@ tr.sig td{background:rgba(34,197,94,.10)}
       <button id="bMmConnect" style="width:100%;margin-top:6px">Connect MetaMask</button>
       <div id="mmStatus" class="note" style="margin-top:8px">Not connected.</div>
       <button id="bMmDisconnect" style="width:100%;margin-top:6px;display:none">Forget this connection</button>
+      <div class="hint">Arbitrum and Ethereum also show your USDC and USDT balance alongside the native ETH balance.</div>
 
       <p style="margin-top:16px"><b>Solana (Phantom)</b></p>
       <button id="bSolConnect" style="width:100%">Connect Phantom</button>
@@ -248,7 +250,7 @@ tr.sig td{background:rgba(34,197,94,.10)}
       <option value="hyperliquid">Hyperliquid - REAL trading (wallet)</option>
       <option value="binance">Binance - REAL trading (API key)</option>
       <option value="solana">Solana wallet (Phantom) - manual swap only</option>
-      <option value="metamask">MetaMask (Ethereum / BNB / Monad) - view only</option>
+      <option value="metamask">MetaMask (Arbitrum / Ethereum / BNB / Monad) - view only</option>
       <option value="tron">Tron (TronLink) - view only</option>
     </select>
     <div id="simOnly">
@@ -349,6 +351,7 @@ tr.sig td{background:rgba(34,197,94,.10)}
       <div id="woMetamask" style="display:none">
         <label for="wo_mmNetwork">Network</label>
         <select id="wo_mmNetwork">
+          <option value="arbitrum">Arbitrum One (Hyperliquid's chain)</option>
           <option value="ethereum">Ethereum Mainnet</option>
           <option value="bnb">BNB Smart Chain</option>
           <option value="monad">Monad Testnet</option>
@@ -3132,11 +3135,23 @@ const Fund = {
    These read public chain data and, for MetaMask/Phantom/TronLink, ask the extension to reveal an address -
    nothing here ever signs a transfer or trade. */
 const MM_NETWORKS = {
+  arbitrum: {chainIdHex: "0xa4b1", name: "Arbitrum One", rpc: "https://arb1.arbitrum.io/rpc", symbol: "ETH", explorer: "https://arbiscan.io/address/",
+        addParams: {chainId: "0xa4b1", chainName: "Arbitrum One", nativeCurrency: {name: "Ether", symbol: "ETH", decimals: 18}, rpcUrls: ["https://arb1.arbitrum.io/rpc"], blockExplorerUrls: ["https://arbiscan.io"]}},
   ethereum: {chainIdHex: "0x1", name: "Ethereum Mainnet", rpc: "https://eth.llamarpc.com", symbol: "ETH", explorer: "https://etherscan.io/address/"},
   bnb: {chainIdHex: "0x38", name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org", symbol: "BNB", explorer: "https://bscscan.com/address/",
         addParams: {chainId: "0x38", chainName: "BNB Smart Chain", nativeCurrency: {name: "BNB", symbol: "BNB", decimals: 18}, rpcUrls: ["https://bsc-dataseed.binance.org"], blockExplorerUrls: ["https://bscscan.com"]}},
   monad: {chainIdHex: "0x279f", name: "Monad Testnet", rpc: "https://testnet-rpc.monad.xyz", symbol: "MON", explorer: "https://testnet.monadexplorer.com/address/",
           addParams: {chainId: "0x279f", chainName: "Monad Testnet", nativeCurrency: {name: "MON", symbol: "MON", decimals: 18}, rpcUrls: ["https://testnet-rpc.monad.xyz"], blockExplorerUrls: ["https://testnet.monadexplorer.com"]}},
+};
+/* USDC/USDT contract addresses shown alongside the native balance - only listed for networks where each
+   address was individually checked against that network's block explorer (name/symbol/decimals matched) before
+   being hardcoded here. Left out for a network rather than guessed. Arbitrum's USDT is "USD₮0" - Tether's own
+   migration of legacy Arbitrum USDT to a LayerZero-native version at the same address; still 1:1 USDT. */
+const STABLES_BY_NET = {
+  ethereum: [{symbol: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6},
+             {symbol: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6}],
+  arbitrum: [{symbol: "USDC", address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6},
+             {symbol: "USDT", address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", decimals: 6}],
 };
 /* On a phone, "install a browser extension" is impossible - MetaMask/Phantom/TronLink extensions only exist on
    desktop browsers. Their apps instead work by opening THIS page inside their own in-app browser, reachable via
@@ -3169,6 +3184,15 @@ const MultiChain = {
     if (j.error) throw new Error(j.error.message || "RPC error");
     return Number(BigInt(j.result)) / 1e18;
   },
+  async erc20Balance(rpcUrl, token, address, decimals) {
+    const data = "0x70a08231" + "000000000000000000000000" + address.slice(2).toLowerCase();
+    const resp = await fetch(rpcUrl, {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({jsonrpc: "2.0", id: 1, method: "eth_call", params: [{to: token, data}, "latest"]})});
+    const j = await resp.json();
+    if (j.error) throw new Error(j.error.message || "RPC error");
+    if (!j.result || j.result === "0x") return 0;
+    return Number(BigInt(j.result)) / (10 ** decimals);
+  },
   async mmConnect(netKey) {
     if (!window.ethereum) throw new Error("No browser wallet found. Install MetaMask, Rabby or similar.");
     const net = MM_NETWORKS[netKey];
@@ -3183,7 +3207,13 @@ const MultiChain = {
   },
   async mmBalance() {
     const net = MM_NETWORKS[this.mm.network];
-    return this.rpcBalance(net.rpc, this.mm.address);
+    const native = await this.rpcBalance(net.rpc, this.mm.address);
+    const stables = [];
+    for (const t of (STABLES_BY_NET[this.mm.network] || [])) {
+      try { stables.push({symbol: t.symbol, amount: await this.erc20Balance(net.rpc, t.address, this.mm.address, t.decimals)}); }
+      catch (e) { /* one stablecoin lookup failing shouldn't hide the native balance */ }
+    }
+    return {native, stables};
   },
   async solConnect() {
     if (!window.solana || !window.solana.isPhantom) throw new Error("Phantom wallet not found. Install it from phantom.app.");
@@ -3651,6 +3681,10 @@ async function renderFund() {
 }
 $("bFundRefresh").onclick = renderFund;
 /* ---------- Wallets tab (other chains: connect + view balance only) ---------- */
+function mmBalanceLine(bal, net, address) {
+  const stableTxt = bal.stables.length ? " + " + bal.stables.map(s => `<b>${s.amount.toFixed(2)} ${s.symbol}</b>`).join(", ") : "";
+  return `Connected: <b>${address.slice(0,6)}...${address.slice(-4)}</b> on ${net.name}. Balance: <b>${bal.native.toFixed(6)} ${net.symbol}</b>${stableTxt}. <a href="${net.explorer}${address}" target="_blank" rel="noopener" style="color:var(--accent)">View &#8599;</a>`;
+}
 async function mmConnectClick() {
   const st = $("mmStatus"); $("bMmConnect").disabled = true; st.className = "note"; st.textContent = "Connecting...";
   try {
@@ -3658,7 +3692,7 @@ async function mmConnectClick() {
     st.className = "note ok"; st.textContent = "Checking balance...";
     const bal = await MultiChain.mmBalance();
     const net = MM_NETWORKS[MultiChain.mm.network];
-    st.innerHTML = `Connected: <b>${MultiChain.mm.address.slice(0,6)}...${MultiChain.mm.address.slice(-4)}</b> on ${net.name}. Balance: <b>${bal.toFixed(6)} ${net.symbol}</b>. <a href="${net.explorer}${MultiChain.mm.address}" target="_blank" rel="noopener" style="color:var(--accent)">View &#8599;</a>`;
+    st.innerHTML = mmBalanceLine(bal, net, MultiChain.mm.address);
     $("bMmDisconnect").style.display = "block";
   } catch (e) { renderWalletErr(st, e, "mm"); }
   $("bMmConnect").disabled = false;
@@ -3876,7 +3910,7 @@ async function woMmConnectClick() {
     st.className = "note ok"; st.textContent = "Checking balance...";
     const bal = await MultiChain.mmBalance();
     const net = MM_NETWORKS[MultiChain.mm.network];
-    st.innerHTML = `Connected: <b>${MultiChain.mm.address.slice(0,6)}...${MultiChain.mm.address.slice(-4)}</b> on ${net.name}. Balance: <b>${bal.toFixed(6)} ${net.symbol}</b>.`;
+    st.innerHTML = mmBalanceLine(bal, net, MultiChain.mm.address);
     $("mmStatus").innerHTML = st.innerHTML; $("bMmDisconnect").style.display = "block";
   } catch (e) { renderWalletErr(st, e, "mm"); }
   $("bWoMmConnect").disabled = false;
